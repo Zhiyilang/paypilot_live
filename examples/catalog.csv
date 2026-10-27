@@ -1,0 +1,18 @@
+﻿id,name,category,price,rating,tags,merchant,stock
+G001,Deluxe Garden Tool Set,garden,34.99,4.6,watering can;trowel;pruner;gift box,GreenThumb Co,42
+G002,Ceramic Succulent Pot Trio,garden,28.50,4.3,succulent;ceramic;decor;gift box,PotAndBloom,17
+G003,Automatic Plant Watering Spikes,garden,12.99,4.1,watering;gadget;travel,GreenThumb Co,88
+G004,Bonsai Starter Kit,garden,89.00,4.8,bonsai;kit;hobby,ZenLeaf,6
+T001,Mechanical Keyboard RGB,electronics,79.99,4.4,keyboard;rgb;gaming;usb,KeyForge,23
+T002,Wireless Noise-Cancelling Earbuds,electronics,129.00,4.5,earbuds;audio;travel,SoundShell,31
+T003,USB-C Hub 7-in-1,electronics,45.50,4.2,usb;hub;adapter,KeyForge,54
+T004,Smart LED Light Strip 5m,electronics,24.99,4.0,led;lights;smart home,LumaTech,77
+H001,Cashmere Wool Scarf,apparel,59.00,4.7,scarf;wool;winter;gift box,SoftWeave,19
+H002,Leather Card Holder,apparel,39.00,4.4,wallet;leather;gift,SoftWeave,35
+H003,Running Socks 3-Pack,apparel,14.50,4.1,socks;sport,StrideLine,120
+H004,Insulated Travel Mug,apparel,32.00,4.6,mug;travel;coffee,BrewMate,64
+L001,Luxury Automatic Watch,luxury,499.00,4.9,watch;luxury;automatic,TimeVault,4
+L002,Designer Sunglasses,luxury,189.00,4.2,sunglasses;fashion,LuxView,12
+B001,Bestseller Novel Hardcover,books,18.99,4.8,book;fiction;gift,PaperLane,90
+B002,Cookbook: 100 Weeknight Dinners,books,26.00,4.5,book;cooking;gift,PaperLane,45
+B003,Guided Journal for Mom,books,21.50,4.7,journal;gift;mindfulness,PaperLane,38

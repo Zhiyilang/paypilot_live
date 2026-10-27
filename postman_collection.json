@@ -1,0 +1,210 @@
+{
+  "info": {
+    "name": "PayPilot API",
+    "description": "PayPilot - an AI shopping agent with hard spending guardrails.\n\nLoop: PERCEIVE -> SEARCH -> SELECT -> POLICY -> APPROVAL -> EXPLAIN -> EXECUTE -> CAPTURE -> RECEIPT.\n\nMoney never moves before policy runs: `blocked` and `awaiting_approval` are normal outcomes, not errors.\n\nRuns with zero credentials - without PayPal keys the server uses an in-process PayPal mock, so every request here works offline.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.1.0"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8780",
+      "type": "string",
+      "description": "Local demo server (python -m paypilot serve), or your deployed origin."
+    },
+    {
+      "key": "product_id",
+      "value": "G001",
+      "type": "string",
+      "description": "Any catalog id - see GET /api/v1/catalog for the full list."
+    }
+  ],
+  "item": [
+    {
+      "name": "Meta",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/health",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "health"]
+            },
+            "description": "Liveness plus the current PayPal mode and brain."
+          },
+          "response": []
+        },
+        {
+          "name": "Agent context",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/context",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "context"]
+            },
+            "description": "Compact API + policy digest designed to be pasted into an LLM prompt."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Catalog",
+      "item": [
+        {
+          "name": "Search catalog",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/catalog?category=books&max_price=40&sort=value",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "catalog"],
+              "query": [
+                { "key": "category", "value": "books" },
+                { "key": "max_price", "value": "40" },
+                { "key": "sort", "value": "value" }
+              ]
+            },
+            "description": "Ranked candidates with match evidence per row."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Quote (never pays)",
+      "item": [
+        {
+          "name": "Quote a request",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request\": \"Birthday gift for my mom, under $50 - she loves gardening\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/quote",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "quote"]
+            },
+            "description": "Parses the request into an intent and ranks candidates. Does not move money."
+          },
+          "response": []
+        },
+        {
+          "name": "Quote - empty request (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request\": \"   \"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/quote",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "quote"]
+            },
+            "description": "Expect 400 with error.code = EMPTY_REQUEST."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Policy",
+      "item": [
+        {
+          "name": "Check a product",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": \"{{product_id}}\",\n  \"daily_spent\": 0\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/policy/check",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "policy", "check"]
+            },
+            "description": "Returns allow | block | hold plus the exact rule and evidence."
+          },
+          "response": []
+        },
+        {
+          "name": "Check - daily limit blown (block)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": \"{{product_id}}\",\n  \"daily_spent\": 99999\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/policy/check",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "policy", "check"]
+            },
+            "description": "Expect action=block with rule=DAILY_LIMIT."
+          },
+          "response": []
+        },
+        {
+          "name": "Check - unknown product (404)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": \"NOPE\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/policy/check",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "policy", "check"]
+            },
+            "description": "Expect 404 with error.code = UNKNOWN_PRODUCT."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Agent",
+      "item": [
+        {
+          "name": "Run the agent",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request\": \"cheapest gardening book\",\n  \"approve\": false\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/agent/run",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "agent", "run"]
+            },
+            "description": "The full loop. Set approve=true only with explicit human consent."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

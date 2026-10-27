@@ -1,0 +1,295 @@
+openapi: 3.0.3
+info:
+  title: PayPilot API
+  version: 1.1.0
+  summary: An AI shopping agent with hard spending guardrails.
+  description: |
+    PayPilot turns a natural-language shopping request into a policy-checked,
+    evidence-cited purchase and a receipt.
+
+    The loop is PERCEIVE -> SEARCH -> SELECT -> POLICY -> APPROVAL -> EXPLAIN
+    -> EXECUTE -> CAPTURE -> RECEIPT. Every phase is returned in the
+    `trail` array with the field-level evidence that produced it, so a caller
+    can audit why money did (or did not) move.
+
+    Two properties matter most:
+
+    * **Money never moves before policy runs.** `/agent/run` can return
+      `blocked` or `awaiting_approval`; those are normal outcomes, not errors.
+    * **No key required to try it.** Without PayPal credentials the server runs
+      against an in-process PayPal mock, so every endpoint is exercisable
+      offline.
+
+    Machine-readable agent context (a compact digest of this document plus the
+    spending rules) is served at `GET /api/v1/context`.
+  contact:
+    name: PayPilot
+    url: https://github.com/Zhiyilang/paypilot
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+servers:
+  - url: http://127.0.0.1:8780
+    description: Local demo server (python -m paypilot serve)
+  - url: https://paypilot.onrender.com
+    description: Hosted demo (mock PayPal mode)
+tags:
+  - name: meta
+    description: Liveness, agent context and documentation.
+  - name: catalog
+    description: Product search with evidence-cited ranking.
+  - name: policy
+    description: The deterministic spending guardrails.
+  - name: agent
+    description: The full agent loop, including payment.
+paths:
+  /api/v1/health:
+    get:
+      tags: [meta]
+      summary: Liveness probe plus current PayPal mode and brain.
+      operationId: health
+      responses:
+        '200':
+          description: Service is up.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+  /api/v1/context:
+    get:
+      tags: [meta]
+      summary: Compact API + policy digest designed to be pasted into an LLM prompt.
+      operationId: context
+      responses:
+        '200':
+          description: Context block.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+  /api/v1/catalog:
+    get:
+      tags: [catalog]
+      summary: Search and rank products, with match evidence per candidate.
+      operationId: listCatalog
+      parameters:
+        - name: q
+          in: query
+          description: Free-text keywords matched against name, category and tags.
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: max_price
+          in: query
+          schema:
+            type: number
+        - name: sort
+          in: query
+          description: '`value` (default, rating-led) or `price_asc`.'
+          schema:
+            type: string
+            enum: [value, price_asc]
+      responses:
+        '200':
+          description: Ranked candidates.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+  /api/v1/quote:
+    post:
+      tags: [catalog]
+      summary: Parse a request into an intent and rank candidates. Never pays.
+      operationId: quote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuoteRequest'
+      responses:
+        '200':
+          description: Intent plus ranked candidates.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/v1/policy/check:
+    post:
+      tags: [policy]
+      summary: Evaluate one product against the spending policy.
+      operationId: policyCheck
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyCheckRequest'
+      responses:
+        '200':
+          description: The decision and the exact rule that produced it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '404':
+          description: Unknown product id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /api/v1/agent/run:
+    post:
+      tags: [agent]
+      summary: Run the full loop and, if policy allows, pay.
+      operationId: runAgent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunRequest'
+      responses:
+        '200':
+          description: Outcome plus the full decision trail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+components:
+  responses:
+    BadRequest:
+      description: Malformed or missing request fields.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+  schemas:
+    Envelope:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: true
+        data:
+          description: Endpoint-specific payload.
+        meta:
+          type: object
+          additionalProperties: true
+    ErrorEnvelope:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: EMPTY_REQUEST
+            message:
+              type: string
+    QuoteRequest:
+      type: object
+      required: [request]
+      properties:
+        request:
+          type: string
+          example: Birthday gift for my mom, under $50 - she loves gardening
+    PolicyCheckRequest:
+      type: object
+      required: [product_id]
+      properties:
+        product_id:
+          type: string
+          example: G01
+        daily_spent:
+          type: number
+          default: 0
+        policy:
+          $ref: '#/components/schemas/Policy'
+    RunRequest:
+      type: object
+      required: [request]
+      properties:
+        request:
+          type: string
+          example: cheapest gardening book
+        approve:
+          type: boolean
+          description: Required to pay when the policy returns `hold`.
+          default: false
+        daily_spent:
+          type: number
+          default: 0
+    Policy:
+      type: object
+      properties:
+        max_per_order:
+          type: number
+          default: 200
+        daily_limit:
+          type: number
+          default: 500
+        approval_threshold:
+          type: number
+          default: 100
+        allowed_categories:
+          type: array
+          items:
+            type: string
+          default: [garden, electronics, apparel, books]
+        blocked_merchants:
+          type: array
+          items:
+            type: string
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        merchant:
+          type: string
+        price:
+          type: number
+        rating:
+          type: number
+        stock:
+          type: integer
+        tags:
+          type: array
+          items:
+            type: string
+    PolicyDecision:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: [allow, block, hold]
+        rule:
+          type: string
+          enum:
+            - ALL_CHECKS_PASSED
+            - BLOCKED_MERCHANT
+            - CATEGORY_NOT_ALLOWED
+            - MAX_PER_ORDER
+            - DAILY_LIMIT
+            - APPROVAL_THRESHOLD
+        detail:
+          type: string
+        evidence:
+          type: array
+          items:
+            type: string
